@@ -1,0 +1,152 @@
+import tkinter as tk
+from PIL import Image, ImageTk
+import random
+import pygame  # For sound
+
+# Initialize pygame mixer
+pygame.mixer.init()
+pygame.mixer.music.load("Elevator Music (Kevin MacLeod) - Background Music (HD).mp3")
+pygame.mixer.music.play(-1)  # Loop forever
+
+bounce_sound = pygame.mixer.Sound("Cartoon Bounce Sound Effect.mp3")
+
+root = tk.Tk()
+root.title("Brick Breaker Game")
+
+width = 900
+height = 500
+canvas = tk.Canvas(root, width=width, height=height, bg="black")
+canvas.pack()
+
+# Load and set background image
+bg_image = Image.open("background.jpg").resize((width, height))
+bg_photo = ImageTk.PhotoImage(bg_image)
+canvas.create_image(0, 0, image=bg_photo, anchor=tk.NW)
+
+# Load ball image
+ball_img = Image.open("ball.png").resize((30, 30))
+ball_photo = ImageTk.PhotoImage(ball_img)
+ball = canvas.create_image(450, 300, image=ball_photo)
+
+# Platform (paddle)
+platform_width = 100
+platform_y = height - 30
+platform = canvas.create_rectangle(width//2 - platform_width//2, platform_y,
+                                   width//2 + platform_width//2, platform_y + 10, fill="gray")
+
+# Create bricks
+brick_rows = 6
+brick_cols = 12
+brick_width = 60
+brick_height = 20
+bricks = []
+colors = ["red", "orange", "yellow", "green", "blue", "purple"]
+
+for row in range(brick_rows):
+    for col in range(brick_cols):
+        x1 = col * (brick_width + 5) + 35
+        y1 = row * (brick_height + 5) + 30
+        x2 = x1 + brick_width
+        y2 = y1 + brick_height
+        brick = canvas.create_rectangle(x1, y1, x2, y2, fill=colors[row % len(colors)], outline="white")
+        bricks.append(brick)
+
+# Ball speed
+xspeed = 3
+yspeed = -3
+
+score = 0
+score_text = canvas.create_text(70, 20, text=f"Score: {score}", fill="white", font=("Arial", 16))
+
+def move_ball():
+    global xspeed, yspeed, score
+
+    x1, y1 = canvas.coords(ball)
+    x2 = x1 + 30
+    y2 = y1 + 30
+
+    # Bounce from walls
+    if x1 <= 0 or x2 >= width:
+        xspeed = -xspeed
+        bounce_sound.play()
+    if y1 <= 0:
+        yspeed = -yspeed
+        bounce_sound.play()
+    if y2 >= height:
+        canvas.create_text(width//2, height//2, text="Game Over", fill="red", font=("Arial", 32))
+        return
+
+    # Bounce from paddle
+    px1, py1, px2, py2 = canvas.coords(platform)
+    if px1 < x2 < px2 and y2 >= py1 and y1 <= py2:
+        yspeed = -abs(yspeed)
+        bounce_sound.play()
+
+    # Bounce from bricks
+    for brick in bricks:
+        bx1, by1, bx2, by2 = canvas.coords(brick)
+        if bx1 < x1 < bx2 and by1 < y1 < by2:
+            canvas.delete(brick)
+            bricks.remove(brick)
+            yspeed = -yspeed
+            bounce_sound.play()
+            score += 10
+            canvas.itemconfig(score_text, text=f"Score: {score}")
+            break
+
+    canvas.move(ball, xspeed, yspeed)
+
+
+    # Check if all bricks are destroyed
+    if not bricks:
+        pygame.mixer.Sound("Celebration Sound Effect.mp3").play()  # Make sure this sound exists
+        canvas.create_text(width//2, height//2, text="Level Complete!", fill="gold", font=("Arial", 28, "bold"))
+        
+        # Prepare next level after delay
+        def next_level():
+            global xspeed, yspeed, bricks
+            canvas.delete("all")
+            canvas.create_image(0, 0, image=bg_photo, anchor=tk.NW)
+            canvas.itemconfig(score_text, text=f"Score: {score}")
+            canvas.create_window(70, 20, window=score_text)
+            canvas.coords(ball, 450, 300)
+            canvas.coords(platform, width//2 - platform_width//2, platform_y, width//2 + platform_width//2, platform_y + 10)
+
+            # Increase speed
+            xspeed = xspeed * 1.2
+            yspeed = yspeed * 1.2
+
+            # Recreate bricks
+            bricks = []
+            for row in range(brick_rows):
+                for col in range(brick_cols):
+                    x1 = col * (brick_width + 5) + 35
+                    y1 = row * (brick_height + 5) + 30
+                    x2 = x1 + brick_width
+                    y2 = y1 + brick_height
+                    brick = canvas.create_rectangle(x1, y1, x2, y2, fill=colors[row % len(colors)], outline="white")
+                    bricks.append(brick)
+
+            move_ball()
+
+        canvas.after(2000, next_level)  # Wait 2 seconds before starting next level
+        return
+
+    canvas.after(20, move_ball)
+
+
+def board_right(event):
+    x1, _, x2, _ = canvas.coords(platform)
+    if x2 < width:
+        canvas.move(platform, 20, 0)
+
+def board_left(event):
+    x1, _, x2, _ = canvas.coords(platform)
+    if x1 > 0:
+        canvas.move(platform, -20, 0)
+
+canvas.bind_all('<Right>', board_right)
+canvas.bind_all('<Left>', board_left)
+
+move_ball()
+root.mainloop()
